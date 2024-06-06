@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="16dp">
+
+    <ImageView
+        android:id="@+id/filterIconImageView"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:src="@drawable/filmicon"
+        android:contentDescription="filter icon" />
+    <!--<a href="https://www.flaticon.com/kr/free-icons/" title="필름 아이콘">필름 아이콘 제작자: Freepik - Flaticon</a>-->
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="5"
+        android:orientation="vertical"
+        android:layout_marginStart="16dp">
+
+        <TextView
+            android:id="@+id/textViewFilterName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Filter 1"
+            android:textSize="30sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/textViewFilterDescription"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Filter 1에 대한 설명"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+</LinearLayout>
