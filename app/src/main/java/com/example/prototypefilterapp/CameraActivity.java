@@ -6,6 +6,7 @@ import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
+import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
 import android.graphics.drawable.BitmapDrawable;
 import android.hardware.camera2.CameraAccessException;
@@ -28,7 +29,6 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.Toast;
@@ -36,11 +36,9 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-
 import org.wysaid.common.Common;
 import org.wysaid.nativePort.CGENativeLibrary.LoadImageCallback;
 import org.wysaid.nativePort.CGENativeLibrary;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -49,11 +47,14 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
+import java.util.List;
 
 public class CameraActivity extends AppCompatActivity {
-    
+
     private static final int REQUEST_CAMERA_PERMISSION = 200;
+
     private TextureView textureView;
     private ImageButton captureButton;
     private ImageButton switchCameraButton;
@@ -61,21 +62,20 @@ public class CameraActivity extends AppCompatActivity {
     private CaptureRequest.Builder captureRequestBuilder;
     private CameraCaptureSession cameraCaptureSession;
     private ImageReader imageReader;
-    private ImageView filteredImageView; // 추가: 필터링된 이미지를 표시할 ImageView
-    // 현재 카메라 모드를 추적하기 위한 변수 추가
+    private ImageView filteredImageView;
+
     private boolean isFrontCamera = false;
     private DatabaseHelper databaseHelper;
     private int frameCount = 0;
-    private static final int FRAME_SKIP = 1; //현재는 프레임 하나당 바로 적용
+    private static final int FRAME_SKIP = 3;
     private String filterType;
+    private Size previewSize;
+    private Size imageSize;
 
     {
-        // 로딩 콜백을 설정합니다.
         CGENativeLibrary.setLoadImageCallback(new LoadImageCallback() {
             @Override
             public Bitmap loadImage(String imgName, Object arg) {
-                // 이미지를 로드하는 로직을 구현합니다.
-                // 지금은 필요없으므로 null을 반환합니다.
                 int resID = getResources().getIdentifier(imgName, "drawable", getPackageName());
                 if (resID != 0) {
                     return BitmapFactory.decodeResource(getResources(), resID);
@@ -85,26 +85,20 @@ public class CameraActivity extends AppCompatActivity {
 
             @Override
             public void loadImageOK(Bitmap bmp, Object arg) {
-                // 이미지를 성공적으로 로드했을 때 호출됩니다.
-                // 여기서 이미지를 사용한 후 자원을 해제할 수 있습니다.
                 if (bmp != null) {
                     bmp.recycle();
                 }
             }
-        }, null); // 두 번째 인자는 필요하지 않으면 null을 전달할 수 있습니다.
+        }, null);
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // 상태 표시줄을 숨깁니다.
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         CGENativeLibrary.LoadImageCallback mLoadImageCallback = new CGENativeLibrary.LoadImageCallback() {
-
-            //Notice: the 'name' passed in is just what you write in the rule, e.g: 1.jpg
             @Override
             public Bitmap loadImage(String name, Object arg) {
-
                 Log.i(Common.LOG_TAG, "Loading file: " + name);
                 AssetManager am = getAssets();
                 InputStream is;
@@ -114,32 +108,27 @@ public class CameraActivity extends AppCompatActivity {
                     Log.e(Common.LOG_TAG, "Can not open file " + name);
                     return null;
                 }
-
                 return BitmapFactory.decodeStream(is);
             }
-
             @Override
             public void loadImageOK(Bitmap bmp, Object arg) {
                 Log.i(Common.LOG_TAG, "Loading bitmap over, you can choose to recycle or cache");
-
-                //The bitmap is which you returned at 'loadImage'.
-                //You can call recycle when this function is called, or just keep it for further usage.
-                bmp.recycle();
+                if (bmp != null) bmp.recycle();
             }
         };
 
         CGENativeLibrary.setLoadImageCallback(mLoadImageCallback, null);
+
         setContentView(R.layout.activity_camera);
-        setContentView(R.layout.activity_camera);
+
         databaseHelper = new DatabaseHelper(this);
-        //인텐트에서 필터 종류를 가져옵니다.
         filterType = getIntent().getStringExtra("FILTER_TYPE");
         textureView = findViewById(R.id.texture_view);
         captureButton = findViewById(R.id.capture_button);
-        filteredImageView = findViewById(R.id.filtered_image_view); // 추가
+        filteredImageView = findViewById(R.id.filtered_image_view);
+        switchCameraButton = findViewById(R.id.switch_camera_button);
         textureView.setSurfaceTextureListener(surfaceTextureListener);
         captureButton.setOnClickListener(view -> takePicture());
-        switchCameraButton = findViewById(R.id.switch_camera_button); // 추가: 카메라 전환 버튼
         switchCameraButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -147,17 +136,10 @@ public class CameraActivity extends AppCompatActivity {
             }
         });
     }
-    private void switchCamera() {
-        // 현재 카메라 디바이스를 닫습니다.
-        closeCamera();
 
-        // 카메라 디바이스를 변경합니다.
-        if (isFrontCamera) {
-            isFrontCamera = false;
-        } else {
-            isFrontCamera = true;
-        }
-        // 카메라를 엽니다.
+    private void switchCamera() {
+        closeCamera();
+        isFrontCamera = !isFrontCamera;
         openCamera();
     }
 
@@ -168,7 +150,11 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         @Override
-        public void onSurfaceTextureSizeChanged(@NonNull SurfaceTexture surfaceTexture, int width, int height) {}
+        public void onSurfaceTextureSizeChanged(@NonNull SurfaceTexture surfaceTexture, int width, int height) {
+            if (cameraDevice != null && previewSize != null) {
+                configureTransform(width, height);
+            }
+        }
 
         @Override
         public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture surfaceTexture) {
@@ -180,10 +166,17 @@ public class CameraActivity extends AppCompatActivity {
         public void onSurfaceTextureUpdated(@NonNull SurfaceTexture surfaceTexture) {
             frameCount++;
             if (frameCount % FRAME_SKIP == 0) {
-                Bitmap bitmap = textureView.getBitmap(textureView.getWidth(), textureView.getHeight());
-                Bitmap filteredBitmap = abcFilteringFunction(bitmap);
-                filteredImageView.setImageBitmap(filteredBitmap);
-                filteredImageView.setVisibility(View.VISIBLE);
+                // 비동기 스레드에서 작업 실행
+                new Thread(() -> {
+                    Bitmap bitmap = textureView.getBitmap(textureView.getWidth(), textureView.getHeight());
+                    Bitmap filteredBitmap = abcFilteringFunction(bitmap);
+
+                    runOnUiThread(() -> {
+                        filteredImageView.setImageBitmap(filteredBitmap);
+                        filteredImageView.setVisibility(View.VISIBLE);
+                        if (bitmap != null) bitmap.recycle();
+                    });
+                }).start();
             }
         }
     };
@@ -191,48 +184,27 @@ public class CameraActivity extends AppCompatActivity {
     private void openCamera() {
         CameraManager manager = (CameraManager) getSystemService(CAMERA_SERVICE);
         try {
-            String[] cameraIdList = manager.getCameraIdList();
-            String cameraId = null;
-            // 전면 카메라를 사용하는 경우
-            if (isFrontCamera) {
-                for (String id : cameraIdList) {
-                    CameraCharacteristics characteristics = manager.getCameraCharacteristics(id);
-                    // 전면 카메라를 찾습니다.
-                    if (characteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT) {
-                        cameraId = id;
-                        break;
-                    }
-                }
-            } else { // 후면 카메라를 사용하는 경우
-                for (String id : cameraIdList) {
-                    CameraCharacteristics characteristics = manager.getCameraCharacteristics(id);
-                    // 후면 카메라를 찾습니다.
-                    if (characteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK) {
-                        cameraId = id;
-                        break;
-                    }
-                }
-            }
-
+            String cameraId = chooseCameraId(manager);
             if (cameraId == null) {
-                // 선택된 카메라가 없는 경우 오류 메시지를 출력하고 메서드를 종료합니다.
                 Log.e("CameraActivity", "Failed to find camera");
                 return;
             }
 
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-            Size[] jpegSizes = null;
-            if (map != null) {
-                jpegSizes = map.getOutputSizes(ImageFormat.JPEG);
-            }
-            int width = 640;
-            int height = 480;
-            if (jpegSizes != null && jpegSizes.length > 0) {
-                width = jpegSizes[0].getWidth();
-                height = jpegSizes[0].getHeight();
-            }
-            imageReader = ImageReader.newInstance(width, height, ImageFormat.JPEG, 1);
+
+            imageSize = Collections.max(Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)), new CompareSizesByArea());
+
+            int displayWidth = textureView.getWidth();
+            int displayHeight = textureView.getHeight();
+
+            previewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
+                    displayWidth,
+                    displayHeight,
+                    imageSize);
+
+            imageReader = ImageReader.newInstance(imageSize.getWidth(), imageSize.getHeight(), ImageFormat.JPEG, 1);
+
             imageReader.setOnImageAvailableListener(reader -> {
                 Image image = null;
                 try {
@@ -241,10 +213,15 @@ public class CameraActivity extends AppCompatActivity {
                         ByteBuffer buffer = image.getPlanes()[0].getBuffer();
                         byte[] bytes = new byte[buffer.remaining()];
                         buffer.get(bytes);
+
                         Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                         Bitmap filteredBitmap = abcFilteringFunction(bitmap);
-                        filteredImageView.setImageBitmap(filteredBitmap);
-                        filteredImageView.setVisibility(View.VISIBLE);
+
+                        runOnUiThread(() -> {
+                            filteredImageView.setImageBitmap(filteredBitmap);
+                            filteredImageView.setVisibility(View.VISIBLE);
+                        });
+                        if (bitmap != null) bitmap.recycle();
                     }
                 } finally {
                     if (image != null) {
@@ -253,6 +230,7 @@ public class CameraActivity extends AppCompatActivity {
                 }
             }, null);
 
+            // 권한 확인 및 요청
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
                 return;
@@ -262,9 +240,20 @@ public class CameraActivity extends AppCompatActivity {
             e.printStackTrace();
         } catch (IllegalStateException e) {
             e.printStackTrace();
-            // 이미 SurfaceTexture가 사용 중인 경우이므로 그냥 리턴합니다.
-            return;
         }
+    }
+
+    private String chooseCameraId(CameraManager manager) throws CameraAccessException {
+        String[] cameraIdList = manager.getCameraIdList();
+        int facing = isFrontCamera ? CameraCharacteristics.LENS_FACING_FRONT : CameraCharacteristics.LENS_FACING_BACK;
+
+        for (String id : cameraIdList) {
+            CameraCharacteristics characteristics = manager.getCameraCharacteristics(id);
+            if (characteristics.get(CameraCharacteristics.LENS_FACING) == facing) {
+                return id;
+            }
+        }
+        return null;
     }
 
     private final CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
@@ -290,10 +279,19 @@ public class CameraActivity extends AppCompatActivity {
         try {
             SurfaceTexture texture = textureView.getSurfaceTexture();
             assert texture != null;
-            texture.setDefaultBufferSize(textureView.getWidth(), textureView.getHeight());
+
+            if (previewSize != null) {
+                texture.setDefaultBufferSize(previewSize.getWidth(), previewSize.getHeight());
+            } else {
+                texture.setDefaultBufferSize(textureView.getWidth(), textureView.getHeight());
+            }
+
             Surface surface = new Surface(texture);
             captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             captureRequestBuilder.addTarget(surface);
+
+            configureTransform(textureView.getWidth(), textureView.getHeight());
+
             cameraDevice.createCaptureSession(Arrays.asList(surface, imageReader.getSurface()), new CameraCaptureSession.StateCallback() {
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession cameraCaptureSession) {
@@ -326,7 +324,32 @@ public class CameraActivity extends AppCompatActivity {
         }
     }
 
+    private void configureTransform(int viewWidth, int viewHeight) {
+        if (previewSize == null) {
+            return;
+        }
+
+        Matrix matrix = new Matrix();
+        float viewRatio = (float) viewWidth / viewHeight;
+        float previewRatio = (float) previewSize.getWidth() / previewSize.getHeight();
+        float scale;
+
+        if (viewRatio > previewRatio) {
+            scale = (float) viewHeight / previewSize.getHeight();
+        } else {
+            scale = (float) viewWidth / previewSize.getWidth();
+        }
+
+        matrix.setScale(scale, scale, viewWidth / 2, viewHeight / 2);
+
+        textureView.setTransform(matrix);
+    }
+
     private void closeCamera() {
+        if (cameraCaptureSession != null) {
+            cameraCaptureSession.close();
+            cameraCaptureSession = null;
+        }
         if (cameraDevice != null) {
             cameraDevice.close();
             cameraDevice = null;
@@ -337,21 +360,44 @@ public class CameraActivity extends AppCompatActivity {
         }
     }
 
-    //사진을 찍을 때
+    private Size chooseOptimalSize(Size[] choices, int textureViewWidth, int textureViewHeight, Size aspectRatio) {
+        List<Size> bigEnough = new java.util.ArrayList<>();
+        int w = aspectRatio.getWidth();
+        int h = aspectRatio.getHeight();
+
+        for (Size option : choices) {
+            if (option.getHeight() == option.getWidth() * h / w &&
+                    option.getWidth() >= textureViewWidth && option.getHeight() >= textureViewHeight) {
+                bigEnough.add(option);
+            }
+        }
+
+        if (bigEnough.size() > 0) {
+            return Collections.min(bigEnough, new CompareSizesByArea());
+        } else {
+            return Collections.max(Arrays.asList(choices), new CompareSizesByArea());
+        }
+    }
+
+    static class CompareSizesByArea implements java.util.Comparator<Size> {
+        @Override
+        public int compare(Size lhs, Size rhs) {
+            return Long.signum((long) lhs.getWidth() * lhs.getHeight() -
+                    (long) rhs.getWidth() * rhs.getHeight());
+        }
+    }
+
+
     private void takePicture() {
-        // 현재 화면의 filteredImageView에서 Bitmap을 가져옵니다.
         Bitmap bitmap = ((BitmapDrawable) filteredImageView.getDrawable()).getBitmap();
 
         playShutterSound();
-        // 이미지를 저장할 파일 이름을 생성합니다.
+
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         String imageFileName = "JPEG_" + timeStamp + "_";
 
-        // 외부 저장소의 앨범 디렉토리에 이미지를 저장할 폴더를 생성합니다.
         File storageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "FilterApp");
 
-
-        // 만약 폴더가 존재하지 않는다면 생성합니다.
         if (!storageDir.exists()) {
             if (!storageDir.mkdirs()) {
                 Log.e("CameraActivity", "Failed to create directory");
@@ -359,7 +405,7 @@ public class CameraActivity extends AppCompatActivity {
             }
         }
 
-// 저장할 파일 경로를 FilterApp 폴더 내에 지정합니다.
+        // 저장할 파일 경로를 FilterApp 폴더 내에 지정합니다.
         File imageFile = null;
         try {
             imageFile = File.createTempFile(
@@ -373,19 +419,17 @@ public class CameraActivity extends AppCompatActivity {
 
         if (imageFile != null) {
             try {
-                // 파일로 이미지를 저장합니다.
                 OutputStream os = new FileOutputStream(imageFile);
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 100, os);
                 os.close();
-                // 저장된 이미지를 미디어 스캔하여 갤러리에 보이도록 합니다.
+                // 저장된 이미지를 미디어 스캔하여 갤러리에 보이도록
                 MediaScannerConnection.scanFile(this,
                         new String[]{imageFile.getAbsolutePath()},
                         new String[]{"image/jpeg"},
                         null);
-                // 데이터베이스에 이미지 경로를 추가합니다.
+                // 데이터베이스에 이미지 경로를 추가
                 String imagePath = imageFile.getAbsolutePath();
-                databaseHelper.addImagePath(imagePath); // 이 부분에서 데이터베이스에 imagePath를 추가하는 메서드를 호출해야 합니다.
-                // 이미지 저장이 완료되었음을 사용자에게 알립니다.
+                databaseHelper.addImagePath(imagePath);
                 Toast.makeText(this, "사진이 저장되었습니다.", Toast.LENGTH_SHORT).show();
             } catch (IOException e) {
                 e.printStackTrace();
@@ -395,13 +439,17 @@ public class CameraActivity extends AppCompatActivity {
 
     private void playShutterSound() {
         MediaPlayer mediaPlayer = MediaPlayer.create(this, R.raw.shutter_sound);
-        mediaPlayer.start();
+        if (mediaPlayer != null) {
+            mediaPlayer.start();
+            mediaPlayer.setOnCompletionListener(MediaPlayer::release);
+        } else {
+            Log.e("CameraActivity", "Shutter sound resource not found (R.raw.shutter_sound)");
+        }
     }
 
     private Bitmap abcFilteringFunction(Bitmap bitmap) {
-        // Implement your filtering function here
         Bitmap newBitmap= CGENativeLibrary.filterImage_MultipleEffects(bitmap, filterType, 1.0f);
-        return newBitmap; // Placeholder return statement, replace it with your actual filtering logic
+        return newBitmap;
     }
 
     @Override

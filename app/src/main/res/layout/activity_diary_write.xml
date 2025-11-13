@@ -1,0 +1,66 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <ImageButton
+            android:id="@+id/attach_photo_button"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:src="@drawable/attachphoto"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="사진 첨부"
+            android:scaleType="fitCenter"/>
+
+        <ImageView
+            android:id="@+id/photo_preview"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+            android:layout_marginStart="16dp"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            android:contentDescription="첨부된 사진 미리보기" />
+    </LinearLayout>
+
+    <EditText
+        android:id="@+id/diary_edit_text"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="top|start"
+        android:hint="오늘의 일기를 작성해주세요."
+        android:inputType="textMultiLine"
+        android:background="@android:color/transparent"
+        android:padding="8dp" />
+
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp">
+
+        <Button
+            android:id="@+id/analyze_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="분석 및 필터 추천"
+            android:backgroundTint="@color/black" />
+
+        <ProgressBar
+            android:id="@+id/progress_bar_recommendation"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerInParent="true"
+            android:visibility="gone" />
+
+    </RelativeLayout>
+    <!--<a href="https://www.flaticon.com/kr/free-icons/" title="그림 아이콘">그림 아이콘 제작자: smashingstocks - Flaticon</a>-->
+</LinearLayout>

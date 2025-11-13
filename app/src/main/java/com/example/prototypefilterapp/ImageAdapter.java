@@ -1,7 +1,6 @@
 package com.example.prototypefilterapp;
 
 import android.content.Context;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -47,7 +46,6 @@ public class ImageAdapter extends BaseAdapter {
             imageView = (ImageView) convertView;
         }
 
-        // Glide를 사용하여 이미지를 로드합니다.
         Glide.with(context)
                 .load(imagePaths.get(position))
                 .into(imageView);

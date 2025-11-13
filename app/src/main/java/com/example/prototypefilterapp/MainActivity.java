@@ -24,5 +24,22 @@ public class    MainActivity extends AppCompatActivity {
                 startActivity(intent);
             }
         });
+        Button storyButton = findViewById(R.id.button_story);
+        storyButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(MainActivity.this, StoryFeedActivity.class);
+                startActivity(intent);
+            }
+        });
+
+        Button promptButton = findViewById(R.id.button_filter_store);
+        promptButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(MainActivity.this, PromptImageActivity.class);
+                startActivity(intent);
+            }
+        });
     }
 }
