@@ -1,0 +1,5 @@
+Flask
+gunicorn              # 💡 프로덕션 웹 서버 (WSGI)
+google-genai          # Gemini API
+Pillow                # 이미지 처리
+google-cloud-translate # 한국어 번역
