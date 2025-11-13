@@ -38,7 +38,7 @@ CGE 로컬 필터링: CGE 라이브러리를 활용하여 20가지 이상의 필
 </br>
 <img width="971" height="488" alt="image" src="https://github.com/user-attachments/assets/7eb750bc-5fd3-4de5-a60f-14aa6ba51298" />
 
-<h5>주요 API</h5>
+<h5>주요 API, 라이브러리</h5>
 <a href="https://docs.cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash?hl=ko">LLM (gemini 2.5 flash)</a> 
 </br>
 <a href="https://github.com/wysaid/android-gpuimage-plus">Filter : https://github.com/wysaid/android-gpuimage-plus</a>
